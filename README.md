@@ -1,7 +1,7 @@
 # croncalJS
 
 ## Description
-croncalJS is a JavaScript version of croncal https://github.com/waldner/croncal.
+croncalJS is a JavaScript version of croncal (perl) https://github.com/waldner/croncal.
 it's an utility to convert a crontab file to a list of actual events within a unix timestamp range.
 
 
