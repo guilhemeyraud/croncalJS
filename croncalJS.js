@@ -1,7 +1,9 @@
-/* 
-  croncalJS, adapted by Guilhem EYRAUD https://github.com/guilhemeyraud/croncalJS 
-  from croncal, created by waldner https://github.com/waldner/croncal .
+/* croncalJS
 */
+
+
+module.exports = croncalJS;// for use in browser just remove this line 
+
 
 function croncalJS(crontabString){
 	this.monthmap = [ 'january|jan', 'february|feb', 'march|mar', 'april|apr', 'may', 'june|jun', 'july|jul', 'august|aug', 'september|sep', 'october|oct', 'november|nov', 'december|dec' ];
@@ -11,6 +13,9 @@ function croncalJS(crontabString){
 	this.type = ["min", "hour", "dom", "month", "dow"];
 	
 	this.joblist = [];
+	
+	this.calendar = {};
+	this.jobListByMinute=[];
 	
 	this.__generateJobList();
 }
@@ -106,31 +111,55 @@ croncalJS.prototype.__generateJobList = function(){
 	}
 }
 
-croncalJS.prototype.genCalendar = function(startSec,endSec){
+croncalJS.prototype.genCalendar = function(startSec,endSec,optional_returnType){
 	var self=this;
 	
-	var calendar = {};
-
+	this.calendar = {};
+	this.jobListByMinute=[];
+	
+	
+	var minute = (endsec-startSec)/60;
+	var jobListByMinute=[];
+	for(var i=0, i<minute ;i++){
+		jobListByMinute[i]=[];
+	}
+	
+	nbMinute=0;
 	for (var second = startSec; second < endSec; second += 60) {
 		var date = new Date(second*1000);
 		var y=date.getFullYear(),m=date.getMonth()+1,d=date.getDate(),h=date.getHours(), mi=date.getMinutes(),dow=date.getDay();
 		for(var i=0, len=self.joblist.length; i<len; i++){
 			if (self.__isdue(d, m, y, dow, h, mi, self.joblist[i])) {
-				if( typeof calendar[y] == 'undefined' ) calendar[y] = [];
-				if( typeof calendar[y][m] == 'undefined' ) calendar[y][m] = [];
-				if( typeof calendar[y][m][d] == 'undefined' ) calendar[y][m][d] = [];
-				if( typeof calendar[y][m][d][h] == 'undefined' ) calendar[y][m][d][h] = [];
-				if( typeof calendar[y][m][d][h][mi]== 'undefined' ) calendar[y][m][d][h][mi] = [];
+				if( typeof self.calendar[y] == 'undefined' ) self.calendar[y] = [];
+				if( typeof self.calendar[y][m] == 'undefined' ) self.calendar[y][m] = [];
+				if( typeof self.calendar[y][m][d] == 'undefined' ) self.calendar[y][m][d] = [];
+				if( typeof self.calendar[y][m][d][h] == 'undefined' ) self.calendar[y][m][d][h] = [];
+				if( typeof self.calendar[y][m][d][h][mi]== 'undefined' ) self.calendar[y][m][d][h][mi] = [];
 				
-				calendar[y][m][d][h][mi].push(self.joblist[i]["command"]);
+				self.calendar[y][m][d][h][mi].push(self.joblist[i]["command"]);
+				self.jobListByMinute[nbMinute].push(self.joblist[i]["command"]);
 				
 			}
 		}
+		nbMinute++;
 	}
-
-	return calendar;
 	
+	if( typeof returnType != 'string' or returnType == "calendar" )
+		return self.calendar;
+	else if( returnType == "jobListByMinute" )
+		return self.jobListByMinute;
+	else
+		return self.calendar;
 }
+
+croncalJS.prototype.getJobListByMinute = function(){
+	return this.jobListByMinute;
+}
+croncalJS.prototype.getCalendar = function(){
+	return this.calendar;
+}
+
+
 
 croncalJS.prototype.__parse = function(field,type){
 	var self = this;
@@ -213,7 +242,9 @@ croncalJS.prototype.__parse = function(field,type){
 			return "too big step value "+step+" for field - "+field+" - of type "+type;
 		}
 
-
+		// now, expand the range...
+		
+		// ...because it's a range, right?
 		var range = items[i].match(/^(\d+)-(\d+)$/);
 		if ( items[i].match(/^(\d+)-(\d+)$/) ) {
 			var from = range[1];
@@ -239,9 +270,23 @@ croncalJS.prototype.__parse = function(field,type){
   return values;
 }
 
-
+// given a crontab entry and a date, returns true
 // if the task has to be executed
 croncalJS.prototype.__isdue = function(day, month, year, dow, hour, min, parsed){
+
+	// we have to run if:
+
+	// min is included in the min list
+	// AND
+	// hour is included in the hour list  
+	// AND
+	// silly dom/dow logic is true
+	// AND
+	// month is included in the month list
+
+	// yes, if one used 1-31, or 1-6,7-31 or 0-6 or whatever, it's not the
+	// same as specifying a real star. It's easy to enhance the code to
+	// include those cases, though.
 
 	var stardom = parsed['dom_orig'] == '*';
 	var stardow = parsed['dow_orig'] == '*';
@@ -251,9 +296,18 @@ croncalJS.prototype.__isdue = function(day, month, year, dow, hour, min, parsed)
 		typeof parsed["hour"][hour] != 'undefined' &&
 		typeof parsed["month"][month] != 'undefined' &&
 
+		// silly dom/dow logic
+
 		( (stardom && stardow) ||
 		(! stardom && ! stardow && ( typeof parsed["dom"][day] != 'undefined' || typeof parsed["dow"][dow] != 'undefined')) ||
 		(! stardom && typeof parsed["dom"][day] != 'undefined') ||
 		(! stardow && typeof parsed["dow"][dow] != 'undefined') ));
 
 }
+
+
+/*******  EXAMPLE :  *******/
+//cronFile="*/1 * * * * /usr/local/sysusage/bin/sysusage > /dev/null 2>&1\n*/5 * * * * /usr/bin/nice -19 /usr/local/sysusage/bin/sysusagejqgraph > /dev/null 2>&1\n#*/5 * * * * /usr/bin/nice -19 /usr/local/sysusage/bin/sysusagegraph > /dev/null 2>&1\n00,10,20,30,40,50 * * * * /var/www/html/sargraph/scripts/getsar.sh > /dev/null 2>&1";
+//var cron = new croncalJS(cronFile);
+//ret = cron.genCalendar(1484092914,1494347114);
+//console.log(ret);
